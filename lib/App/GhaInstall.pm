@@ -36,8 +36,6 @@ sub SHOULD_INSTALL_OPTIONAL_DEPS () {
 sub go {
 	shift;
 	
-	@_ = qw( --auto ) unless @_;
-	
 	my @modules;
 	
 	foreach ( @_ ) {
@@ -173,7 +171,7 @@ sub install_dependencies {
 		push @want, keys %{ $meta->{recommends}         or {} };
 	}
 	
-	push @need, 'App::GhaProve' if $ENV{CI};
+	push @need, 'App::GhaProve';
 	
 	if ( @need ) {
 		install_modules( @need );
@@ -247,8 +245,7 @@ sub install_module {
 
 sub ensure_configured_cpan {
 	return if -f CPAN_CONFIG_FILENAME;
-	
-	my $config = <<'CONFIG';
+	open my $fh, '>', CPAN_CONFIG_FILENAME; print { $fh } <<'CONFIG';
 use Cwd ();
 
 my $home = $ENV{HOME};
@@ -320,10 +317,6 @@ $CPAN::Config = {
 };
 1;
 CONFIG
-
-	open my $fh, '>', CPAN_CONFIG_FILENAME;
-	print { $fh } $config;
-	close $fh;
 }
 
 1;
@@ -340,7 +333,30 @@ App::GhaInstall - provides the gha-install command
 
 =head1 SYNOPSIS
 
+Install dependencies for a distribution, assuming you're in the distro's
+root directory (where Makefile.PL and META.json live):
+
+  $ gha-install --configure
+  $ perl Makefile.PL
+  $ gha-install --auto
+
+Install things by name:
+
+  $ gha-install HTTP::Tiny
+
+Install things by name, but ignore failures:
+
+  $ gha-install --allow-fail HTTP::Tiny
+
 =head1 DESCRIPTION
+
+This is a wrapper around L<App::cpanminus>, L<App::cpm>, or L<CPAN>,
+depending on what is available. Mostly because L<App::cpanminus>
+doesn't work on Perl 5.6.
+
+Copies of L<YAML::Tiny> and L<JSON::Tiny> are bundled, just in case.
+
+C<< gha-install >> is intended to be packable with L<App::FatPacker>.
 
 =head1 BUGS
 
@@ -348,6 +364,8 @@ Please report any bugs to
 L<http://rt.cpan.org/Dist/Display.html?Queue=App-GhaInstall>.
 
 =head1 SEE ALSO
+
+L<App::cpanminus>, L<App::cpm>, L<CPAN>.
 
 =head1 AUTHOR
 
@@ -359,7 +377,6 @@ This software is copyright (c) 2020 by Toby Inkster.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.
-
 
 =head1 DISCLAIMER OF WARRANTIES
 
