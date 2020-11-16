@@ -1,0 +1,19 @@
+# This file contains general metadata about the project.
+
+@prefix : <http://usefulinc.com/ns/doap#>.
+
+`App-GhaInstall`
+	:programming-language "Perl" ;
+	:shortdesc            "provides the gha-install command";
+	:homepage             <https://metacpan.org/release/App-GhaInstall>;
+	:download-page        <https://metacpan.org/release/App-GhaInstall>;
+	:bug-database         <http://rt.cpan.org/Dist/Display.html?Queue=App-GhaInstall>;
+#	:repository           [ a :GitRepository; :browse <https://github.com/tobyink/p5-app-ghainstall> ];
+	:created              2020-11-16;
+	:license              <http://dev.perl.org/licenses/>;
+	:maintainer           cpan:TOBYINK;
+	:developer            cpan:TOBYINK.
+
+<http://dev.perl.org/licenses/>
+	dc:title  "the same terms as the perl 5 programming language system itself".
+
