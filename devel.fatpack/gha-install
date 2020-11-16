@@ -13,7 +13,7 @@ $fatpacked{"App/GhaInstall.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   package App::GhaInstall;
   
   our $AUTHORITY = 'cpan:TOBYINK';
-  our $VERSION   = '0.001';
+  our $VERSION   = '0.002';
   
   our $ALLOW_FAIL = 0;
   our $DRY_RUN    = 0;
@@ -39,6 +39,16 @@ $fatpacked{"App/GhaInstall.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   	no warnings;
   	$ENV{GHA_TESTING_COVER} =~ /^(true|1)$/i
   	or $ENV{GHA_INSTALL_OPTIONAL} =~ /^(true|1)$/i
+  }
+  
+  sub SHOULD_INSTALL_COVERAGE_DEPS () {
+  	no warnings;
+  	$ENV{GHA_TESTING_COVER} =~ /^(true|1)$/i
+  }
+  
+  sub SHOULD_INSTALL_GITHUB_DEPS () {
+  	no warnings;
+  	!! $ENV{CI}
   }
   
   sub go {
@@ -179,7 +189,15 @@ $fatpacked{"App/GhaInstall.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   		push @want, keys %{ $meta->{recommends}         or {} };
   	}
   	
-  	push @need, 'App::GhaProve';
+  	if ( SHOULD_INSTALL_GITHUB_DEPS ) {
+  		push @need, 'App::GhaProve';
+  	}
+  	
+  	if ( SHOULD_INSTALL_COVERAGE_DEPS ) {
+  		push @need, 'Devel::Cover';
+  		push @need, 'Devel::Cover::Report::Coveralls';
+  		push @need, 'Devel::Cover::Report::Codecov';
+  	}
   	
   	if ( @need ) {
   		install_modules( @need );
