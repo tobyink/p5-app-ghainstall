@@ -7,6 +7,325 @@ package App::GhaInstall;
 our $AUTHORITY = 'cpan:TOBYINK';
 our $VERSION   = '0.001';
 
+our $ALLOW_FAIL = 0;
+our $DRY_RUN    = 0;
+
+sub maybe_die {
+	my $exit = shift;
+	if ( $exit ) {
+		if ( $ALLOW_FAIL ) {
+			warn "Failed, but continuing anyway...\n";
+		}
+		else {
+			die "Failed; stopping!\n";
+		}
+	}
+	return;
+}
+
+sub CPAN_CONFIG_FILENAME () {
+	$ENV{HOME} . '/' . 'GhaInstallConfig.pm'
+}
+
+sub SHOULD_INSTALL_OPTIONAL_DEPS () {
+	no warnings;
+	$ENV{GHA_TESTING_COVER} =~ /^(true|1)$/i
+	or $ENV{GHA_INSTALL_OPTIONAL} =~ /^(true|1)$/i
+}
+
+sub go {
+	shift;
+	
+	@_ = qw( --auto ) unless @_;
+	
+	my @modules;
+	
+	foreach ( @_ ) {
+		if ( /--allow-fail/ ) {
+			$ALLOW_FAIL = 1;
+		}
+		elsif ( /--dry-run/ ) {
+			$DRY_RUN = 1;
+		}
+		elsif ( /--configure/ ) {
+			install_configure_dependencies();
+		}
+		elsif ( /--auto/ ) {
+			install_dependencies();
+		}
+		else {
+			push @modules, $_;
+		}
+	}
+	
+	if ( @modules ) {
+		install_modules( @modules );
+	}
+	
+	return 0;
+}
+
+sub slurp {
+	my $file = shift;
+	open my $fh, '<', $file
+		or die "$file exists but cannot be read\n";
+	local $/;
+	return <$fh>;
+}
+
+sub read_json {
+	my $file = shift;
+	return unless -f $file;
+	
+	my $hash;
+	
+	if ( eval { require JSON::MaybeXS; 1 } ) {
+		my $json = 'JSON::MaybeXS'->new;
+		$hash = $json->decode( slurp($file) );
+	}
+	elsif ( eval { require JSON::PP; 1 } ) {
+		my $json = 'JSON::PP'->new;
+		$hash = $json->decode( slurp($file) );
+	}
+	else {
+		# Bundled version of JSON::Tiny
+		require App::GhaInstall::JSON;
+		$hash = JSON::Tiny::decode_json( slurp($file) );
+	}
+	
+	return unless ref($hash) eq 'HASH';
+	
+	$hash->{metatype} = 'JSON';
+	return $hash;
+}
+
+sub read_yaml {
+	my $file = shift;
+	return unless -f $file;
+	
+	my $hash;
+	
+	if ( eval { require JSON::XS; 1 } ) {
+		$hash = YAML::XS::Load( slurp($file) );
+	}
+	else {
+		# Bundled version of YAML::Tiny
+		require App::GhaInstall::YAML;
+		$hash = YAML::Tiny::Load( slurp($file) );		
+	}
+	
+	return unless ref($hash) eq 'HASH';
+	
+	$hash->{metatype} = 'YAML';
+	return $hash;
+}
+
+sub install_configure_dependencies {
+	my $meta =
+		read_json('META.json') || read_yaml('META.yml')
+		or die("Cannot read META.json or META.yml");
+	
+	my ( @need, @want );
+	
+	if ( $meta->{metatype} eq 'JSON' ) {
+		for my $phase ( qw( configure build ) ) {
+			push @need, keys %{ $meta->{prereqs}{$phase}{requires}   or {} };
+			push @want, keys %{ $meta->{prereqs}{$phase}{recommends} or {} };
+			push @want, keys %{ $meta->{prereqs}{$phase}{suggests}   or {} };
+		}
+	}
+	else {
+		push @need, keys %{ $meta->{configure_requires} or {} };
+		push @need, keys %{ $meta->{build_requires}     or {} };
+	}
+	
+	if ( @need ) {
+		install_modules( @need );
+	}
+	
+	if ( @want and SHOULD_INSTALL_OPTIONAL_DEPS ) {
+		local $ALLOW_FAIL = 1;
+		install_modules( @want );
+	}
+	
+	return;
+}
+
+sub install_dependencies {
+	my $meta =
+		read_json('MYMETA.json') || read_yaml('MYMETA.yml') || read_json('META.json') || read_yaml('META.yml')
+		or die("Cannot read MYMETA.json or MYMETA.yml");
+	
+	my ( @need, @want );
+	
+	if ( $meta->{metatype} eq 'JSON' ) {
+		for my $phase ( qw( configure build runtime test ) ) {
+			push @need, keys %{ $meta->{prereqs}{$phase}{requires}   or {} };
+			push @want, keys %{ $meta->{prereqs}{$phase}{recommends} or {} };
+			push @want, keys %{ $meta->{prereqs}{$phase}{suggests}   or {} };
+		}
+	}
+	else {
+		push @need, keys %{ $meta->{configure_requires} or {} };
+		push @need, keys %{ $meta->{build_requires}     or {} };
+		push @need, keys %{ $meta->{requires}           or {} };
+		push @need, keys %{ $meta->{test_requires}      or {} };
+		push @want, keys %{ $meta->{recommends}         or {} };
+	}
+	
+	push @need, 'App::GhaProve' if $ENV{CI};
+	
+	if ( @need ) {
+		install_modules( @need );
+	}
+	
+	if ( @want and SHOULD_INSTALL_OPTIONAL_DEPS ) {
+		local $ALLOW_FAIL = 1;
+		install_modules( @want );
+	}
+	
+	return;
+}
+
+my $installer;
+sub INSTALLER () {
+	return $installer if defined $installer;
+	my $output = `cpanm --version`;
+	if ( $output =~ /cpanminus/ ) {
+		$installer = 'cpanm';
+	}
+	else {
+		$output = `cpm --help`;
+		if ( $output =~ /install/ ) {
+			$installer = 'cpm';
+		}
+		else {
+			ensure_configured_cpan();
+			$installer = 'cpan';
+		}
+	}
+	return $installer;
+}
+
+sub install_modules {
+	my @modules = grep $_ ne 'perl', @_;
+	
+	if ( $DRY_RUN ) {
+		warn "install: $_\n" for @modules;
+		return;
+	}
+
+	if ( INSTALLER eq 'cpanm' ) {
+		return maybe_die system 'cpanm', '-n', @modules;
+	}
+	
+	if ( INSTALLER eq 'cpm' ) {
+		return maybe_die system 'cpm', 'install', '-g', @modules;
+	}
+
+	install_module $_ for @_;
+}
+
+sub install_module {
+	my $module = shift;
+	
+	if ( $DRY_RUN ) {
+		warn "install: $module\n";
+		return;
+	}
+	
+	if ( INSTALLER eq 'cpanm' ) {
+		return maybe_die system 'cpanm', '-n', $module;
+	}
+	
+	if ( INSTALLER eq 'cpm' ) {
+		return maybe_die system 'cpm', 'install', '-g', $module;
+	}
+	
+	return maybe_die system 'cpan', '-J', CPAN_CONFIG_FILENAME, '-T', $module;
+}
+
+sub ensure_configured_cpan {
+	return if -f CPAN_CONFIG_FILENAME;
+	
+	my $config = <<'CONFIG';
+use Cwd ();
+
+my $home = $ENV{HOME};
+my $cwd  = Cwd::cwd;
+
+$CPAN::Config = {
+  'applypatch' => q[],
+  'auto_commit' => q[0],
+  'build_cache' => q[100],
+  'build_dir' => qq[$home/.cpan/build],
+  'build_dir_reuse' => q[0],
+  'build_requires_install_policy' => q[yes],
+  'bzip2' => q[/bin/bzip2],
+  'cache_metadata' => q[1],
+  'check_sigs' => q[0],
+  'colorize_output' => q[0],
+  'commandnumber_in_prompt' => q[1],
+  'connect_to_internet_ok' => q[1],
+  'cpan_home' => qq[$home/.cpan],
+  'ftp_passive' => q[1],
+  'ftp_proxy' => q[],
+  'getcwd' => q[cwd],
+  'gpg' => q[/usr/bin/gpg],
+  'gzip' => q[/bin/gzip],
+  'halt_on_failure' => q[0],
+  'histfile' => qq[$home/.cpan/histfile],
+  'histsize' => q[100],
+  'http_proxy' => q[],
+  'inactivity_timeout' => q[0],
+  'index_expire' => q[1],
+  'inhibit_startup_message' => q[0],
+  'keep_source_where' => qq[$home/.cpan/sources],
+  'load_module_verbosity' => q[none],
+  'make' => q[/usr/bin/make],
+  'make_arg' => q[],
+  'make_install_arg' => q[],
+  'make_install_make_command' => q[/usr/bin/make],
+  'makepl_arg' => q[INSTALLDIRS=site],
+  'mbuild_arg' => q[],
+  'mbuild_install_arg' => q[],
+  'mbuild_install_build_command' => q[./Build],
+  'mbuildpl_arg' => q[--installdirs site],
+  'no_proxy' => q[],
+  'pager' => q[/usr/bin/less],
+  'patch' => q[/usr/bin/patch],
+  'perl5lib_verbosity' => q[none],
+  'prefer_external_tar' => q[1],
+  'prefer_installer' => q[MB],
+  'prefs_dir' => qq[$home/.cpan/prefs],
+  'prerequisites_policy' => q[follow],
+  'scan_cache' => q[atstart],
+  'shell' => q[/bin/sh],
+  'show_unparsable_versions' => q[0],
+  'show_upload_date' => q[0],
+  'show_zero_versions' => q[0],
+  'tar' => q[/bin/tar],
+  'tar_verbosity' => q[none],
+  'term_is_latin' => q[1],
+  'term_ornaments' => q[1],
+  'test_report' => q[0],
+  'trust_test_report_history' => q[0],
+  'unzip' => q[/usr/bin/unzip],
+  'urllist' => [q[http://cpan.mirrors.uk2.net/], q[http://cpan.singletasker.co.uk/], q[http://cpan.cpantesters.org/]],
+  'use_sqlite' => q[0],
+  'version_timeout' => q[15],
+  'wget' => q[/usr/bin/wget],
+  'yaml_load_code' => q[0],
+  'yaml_module' => q[YAML],
+};
+1;
+CONFIG
+
+	open my $fh, '>', CPAN_CONFIG_FILENAME;
+	print { $fh } $config;
+	close $fh;
+}
+
 1;
 
 __END__
