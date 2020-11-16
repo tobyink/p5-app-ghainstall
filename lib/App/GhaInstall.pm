@@ -10,19 +10,6 @@ our $VERSION   = '0.002';
 our $ALLOW_FAIL = 0;
 our $DRY_RUN    = 0;
 
-sub maybe_die {
-	my $exit = shift;
-	if ( $exit ) {
-		if ( $ALLOW_FAIL ) {
-			warn "Failed, but continuing anyway...\n";
-		}
-		else {
-			die "Failed; stopping!\n";
-		}
-	}
-	return;
-}
-
 sub SHOULD_INSTALL_OPTIONAL_DEPS () {
 	no warnings;
 	$ENV{GHA_TESTING_COVER} =~ /^(true|1)$/i
@@ -37,6 +24,36 @@ sub SHOULD_INSTALL_COVERAGE_DEPS () {
 sub SHOULD_INSTALL_GITHUB_DEPS () {
 	no warnings;
 	!! $ENV{CI}
+}
+
+my $installer;
+sub INSTALLER () {
+	return $installer if defined $installer;
+	if ( $ENV{GHA_INSTALL_BACKEND} ) {
+		ensure_configured_cpan() if $ENV{GHA_INSTALL_BACKEND} eq 'cpan';
+		$installer = $ENV{GHA_INSTALL_BACKEND};
+	}
+	elsif ( $] lt '5.008001' ) {
+		ensure_configured_cpan();
+		$installer = 'cpan';
+	}
+	else {
+		my $output = `cpanm --version`;
+		if ( $output =~ /cpanminus/ ) {
+			$installer = 'cpanm';
+		}
+		else {
+			$output = `cpm --help`;
+			if ( $output =~ /install/ ) {
+				$installer = 'cpm';
+			}
+			else {
+				ensure_configured_cpan();
+				$installer = 'cpan';
+			}
+		}
+	}
+	return $installer;
 }
 
 sub go {
@@ -204,34 +221,17 @@ sub install_dependencies {
 	return;
 }
 
-my $installer;
-sub INSTALLER () {
-	return $installer if defined $installer;
-	if ( $ENV{GHA_INSTALL_BACKEND} ) {
-		ensure_configured_cpan() if $ENV{GHA_INSTALL_BACKEND} eq 'cpan';
-		$installer = $ENV{GHA_INSTALL_BACKEND};
-	}
-	elsif ( $] lt '5.008001' ) {
-		ensure_configured_cpan();
-		$installer = 'cpan';
-	}
-	else {
-		my $output = `cpanm --version`;
-		if ( $output =~ /cpanminus/ ) {
-			$installer = 'cpanm';
+sub maybe_die {
+	my $exit = shift;
+	if ( $exit ) {
+		if ( $ALLOW_FAIL ) {
+			warn "Failed, but continuing anyway...\n";
 		}
 		else {
-			$output = `cpm --help`;
-			if ( $output =~ /install/ ) {
-				$installer = 'cpm';
-			}
-			else {
-				ensure_configured_cpan();
-				$installer = 'cpan';
-			}
+			die "Failed; stopping!\n";
 		}
 	}
-	return $installer;
+	return;
 }
 
 sub install_modules {
