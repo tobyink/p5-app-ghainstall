@@ -16,3 +16,9 @@
 		item "Call CPAN.pm directly rather than shelling out to it."^^Change;
 		item "Support GHA_INSTALL_BACKEND env var."^^Change;
 	].
+
+`App-GhaInstall 0.004 cpan:TOBYINK`
+	issued  2020-11-16;
+	changeset [
+		item "Support older versions of Test::More."^^Change;
+	].
