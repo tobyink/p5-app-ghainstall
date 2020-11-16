@@ -33,6 +33,16 @@ sub SHOULD_INSTALL_OPTIONAL_DEPS () {
 	or $ENV{GHA_INSTALL_OPTIONAL} =~ /^(true|1)$/i
 }
 
+sub SHOULD_INSTALL_COVERAGE_DEPS () {
+	no warnings;
+	$ENV{GHA_TESTING_COVER} =~ /^(true|1)$/i
+}
+
+sub SHOULD_INSTALL_GITHUB_DEPS () {
+	no warnings;
+	!! $ENV{CI}
+}
+
 sub go {
 	shift;
 	
@@ -171,7 +181,15 @@ sub install_dependencies {
 		push @want, keys %{ $meta->{recommends}         or {} };
 	}
 	
-	push @need, 'App::GhaProve';
+	if ( SHOULD_INSTALL_GITHUB_DEPS ) {
+		push @need, 'App::GhaProve';
+	}
+	
+	if ( SHOULD_INSTALL_COVERAGE_DEPS ) {
+		push @need, 'Devel::Cover';
+		push @need, 'Devel::Cover::Report::Coveralls';
+		push @need, 'Devel::Cover::Report::Codecov';
+	}
 	
 	if ( @need ) {
 		install_modules( @need );
