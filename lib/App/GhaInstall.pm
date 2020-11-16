@@ -30,11 +30,9 @@ my $installer;
 sub INSTALLER () {
 	return $installer if defined $installer;
 	if ( $ENV{GHA_INSTALL_BACKEND} ) {
-		ensure_configured_cpan() if $ENV{GHA_INSTALL_BACKEND} eq 'cpan';
 		$installer = $ENV{GHA_INSTALL_BACKEND};
 	}
 	elsif ( $] lt '5.008001' ) {
-		ensure_configured_cpan();
 		$installer = 'cpan';
 	}
 	else {
@@ -48,11 +46,11 @@ sub INSTALLER () {
 				$installer = 'cpm';
 			}
 			else {
-				ensure_configured_cpan();
 				$installer = 'cpan';
 			}
 		}
 	}
+	ensure_configured_cpan() if $installer eq 'cpan';
 	return $installer;
 }
 
