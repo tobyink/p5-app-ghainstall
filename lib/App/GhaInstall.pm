@@ -5,7 +5,7 @@ use warnings;
 package App::GhaInstall;
 
 our $AUTHORITY = 'cpan:TOBYINK';
-our $VERSION   = '0.001';
+our $VERSION   = '0.002';
 
 our $ALLOW_FAIL = 0;
 our $DRY_RUN    = 0;
