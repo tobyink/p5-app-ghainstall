@@ -206,18 +206,23 @@ sub install_dependencies {
 my $installer;
 sub INSTALLER () {
 	return $installer if defined $installer;
-	my $output = `cpanm --version`;
-	if ( $output =~ /cpanminus/ ) {
-		$installer = 'cpanm';
+	if ( $] lt '5.008001' ) {
+		$installer = 'cpan';
 	}
 	else {
-		$output = `cpm --help`;
-		if ( $output =~ /install/ ) {
-			$installer = 'cpm';
+		my $output = `cpanm --version`;
+		if ( $output =~ /cpanminus/ ) {
+			$installer = 'cpanm';
 		}
 		else {
-			ensure_configured_cpan();
-			$installer = 'cpan';
+			$output = `cpm --help`;
+			if ( $output =~ /install/ ) {
+				$installer = 'cpm';
+			}
+			else {
+				ensure_configured_cpan();
+				$installer = 'cpan';
+			}
 		}
 	}
 	return $installer;
