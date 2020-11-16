@@ -292,7 +292,7 @@ $fatpacked{"App/GhaInstall.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   sub ensure_configured_cpan {
   	use Cwd ();
   	require CPAN;
-  	require CPAN::Shell;
+  	eval { require CPAN::Shell };
   
   	my $home = $ENV{HOME};
   	my $cwd  = Cwd::cwd;

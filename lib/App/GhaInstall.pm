@@ -284,7 +284,7 @@ sub install_module {
 sub ensure_configured_cpan {
 	use Cwd ();
 	require CPAN;
-	require CPAN::Shell;
+	eval { require CPAN::Shell };
 
 	my $home = $ENV{HOME};
 	my $cwd  = Cwd::cwd;
