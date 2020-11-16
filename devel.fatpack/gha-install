@@ -13,7 +13,7 @@ $fatpacked{"App/GhaInstall.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   package App::GhaInstall;
   
   our $AUTHORITY = 'cpan:TOBYINK';
-  our $VERSION   = '0.002';
+  our $VERSION   = '0.003';
   
   our $ALLOW_FAIL = 0;
   our $DRY_RUN    = 0;

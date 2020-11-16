@@ -9,3 +9,10 @@
 	changeset [
 		item "Install Devel::Cover, etc if GHA_TESTING_COVER is true."^^Bugfix;
 	].
+
+`App-GhaInstall 0.003 cpan:TOBYINK`
+	issued  2020-11-16;
+	changeset [
+		item "Call CPAN.pm directly rather than shelling out to it."^^Change;
+		item "Support GHA_INSTALL_BACKEND env var."^^Change;
+	].
